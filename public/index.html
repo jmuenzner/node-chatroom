@@ -1,0 +1,130 @@
+<html>
+    <head>
+        <title>Bislr Chat Room</title>
+		<style>
+			body, td, div {
+				font-family: Verdana;
+				font-size: 11;
+			}
+	
+			li {
+				list-style: none;
+			}
+		</style>
+	
+	    <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+	    <script type="text/javascript" src="js/jquery-1.7.1.min.js"></script>
+
+	    <script type="text/javascript">
+	        $(document).ready(function() {
+	            var server = io.connect('http://localhost:8080');
+
+				$('#chatmessage').focus();
+
+				// When the connection is established ask the user for a nickname.
+				// prompt seems to look quite weird in Safari, but it was an acceptable 
+				// trade-off for it's simplicity to use ... Other browsers it looks fine. 
+				server.on('connect', function() {
+					server.emit('register', prompt("Please enter your chat room nickname:"));
+				});
+			
+				// If anything goes wrong (name already exists, name too long, etc) try again.
+				// Most of the validations could happen client side (except name exists),
+				// but since I needed one round trip anyways I validated it on the server.
+				server.on('register', function(message) {
+					server.emit('register', prompt(message));
+				});
+
+				// The user list gets updated whenever someone joins or leaves the room.
+				// I am clearing the previous list, since a freshly sorted list will be 
+				// displayed. Adding and removing individual elements seemed painfuller.
+				server.on('userlist', function(users, sorted) {
+			
+					$('#users').children().remove();
+					$.each(sorted, function(index, user) {
+						$('#users').append('<li id="' + user + '"><span style="color: ' + users[user] + '">' + user + '</span></li>');
+					});
+				});
+
+				// I wanted a separate channel for more general activity and have a different
+				// colouring, but I am aware that this is pretty much doubling up with 'updatechat',
+				// which is not ideal ...
+				server.on('useractivity', function(user, message) {
+					$('#messages').append('<li><i><b>' + user + '</b> ' + message + '</i></li>');
+				
+					// Keep scrolling up as text gets entered
+					$("#messages").scrollTop($("#messages").get(0).scrollHeight);
+				});
+
+				// Update the messages and append anything new with colours for each user.
+				// The scrollbar does not adjust to keep scrolling up so I am doing it here. 
+	            server.on('updatechat', function(user, colour, message) {	
+					$('#messages').append('<li><span style="color: ' + colour + '">(' + getTime() + ') <b>' + user + ': </b></span> ' + message + '</li>');
+				
+					// Keep scrolling up as text gets entered
+					$("#messages").scrollTop($("#messages").get(0).scrollHeight);
+	            });
+
+				// Tell the user that there was a disconnection
+	            server.on('disconnect', function() {
+	                $('#messages').append('<li>You have been disconnected.</li>');
+	            });
+
+				// Detect the Return key and send the message to the server
+				// I wanted to add key press detection to let others in the room
+				// know when someone is typing, but didn't get to that.
+				$("#chatmessage").keypress(function(e) {
+		  			if ( e.keyCode != 13 ) return;
+	
+		  			var message = $('#chatmessage').val();
+		  			if ( message != '' ) {
+		     			server.emit('chatmessage', message);
+		     			$('#chatmessage').val('');
+		  			}
+				});
+	        });
+
+			// Utility function to get current time
+			// I need to save these somewhere for myself, it seems like every time
+			// I write something I have to do some cumbersome stitching like this to get
+			// a current time or anything date/time related.
+			function getTime() {
+
+			    var postfix = "",
+			           date = new Date(),
+			        minutes = date.getMinutes(),
+			           hour = date.getHours();
+
+				postfix = ( hour < 12 ) ? "AM" : "PM";
+			    hour    = ( hour == 0 ) ? 12 : ( hour > 12 ) ? hour - 12 : hour;
+		    
+			    minutes += "";
+
+			    if (minutes.length == 1) 
+					minutes = "0" + minutes;
+
+			    return hour + ":" + minutes + " " + postfix;
+			}
+
+	    </script>
+	</head>
+    <body>
+		<div id="chat">
+			<table width="300" height="300" cellpadding="2">
+			   <tr>
+			      <td width="200" height="280">
+		 	         <div id="messages" style="overflow: auto; width: 200; height: 280; border: 1px solid black; padding: 5px 5px 5px 5px;"></div>
+		              </td>
+			      <td width="100" height="280">
+			         <div id="users" style="overflow: auto; width: 100; height: 280; border: 1px solid black; padding: 5px 5px 5px 5px;"></div>
+			      </td>
+			   </tr>
+			   <tr>
+			      <td width="300" height="20" colspan="2">
+			      	<input type="text" id="chatmessage" style="width: 100%;" />
+			      </td>
+			   </tr>
+			</table>
+		</div>
+    </body>
+</html>
